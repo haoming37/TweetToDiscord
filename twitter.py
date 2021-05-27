@@ -4,6 +4,7 @@ import time
 import asyncio
 from threading import Thread
 import json
+import urllib.request
 from singleton_decorator import singleton
 import discord
 import tweepy
@@ -28,14 +29,17 @@ class DiscordBot:
         t = Thread(target=loop.run_forever)
         t.start()
 
-    def post(self, twitter_id, msg, text_channel):
-        function = asyncio.run_coroutine_threadsafe(self._post(twitter_id, msg, text_channel), self.client.loop)
+    def post(self, twitter_id, msg, text_channel, image=None):
+        function = asyncio.run_coroutine_threadsafe(self._post(twitter_id, msg, text_channel, image=image), self.client.loop)
         function.result()
 
-    async def _post(self, twitter_id, msg, text_channel):
+    async def _post(self, twitter_id, msg, text_channel, image=None):
         channel = self.client.get_channel(text_channel)
         embed = discord.Embed(title=twitter_id, description=msg, color=0xff0000)
         await channel.send(embed=embed)
+        if image != None:
+            await channel.send(file=discord.File(image))
+            os.remove(image)
 
     @client.event 
     async def on_message(message):
@@ -88,13 +92,27 @@ def main():
                 cur.execute(query)
                 ret = cur.fetchall()
                 if len(ret) == 0:
+                    # 画像ファイルがある場合は取得してポストする
+                    name = ''
+                    if hasattr(status, 'extended_entities'):
+                        ex_media = status.extended_entities['media']
+                        # 画像ファイルの場合
+                        if 'video_info' not in ex_media:
+                            for image in ex_media:
+                                url = image['media_url']
+                                name = url.split('/')[-1]
+                                urllib.request.urlretrieve(url, name)
+                                print(name)
                     text = status.text.replace('\'', '\'\'')
                     query = 'INSERT INTO tweet values(' + str(status.id) + ', \'' + text + '\')'
                     print(query)
                     cur.execute(query)
                     # Discordにメッセージを投稿
                     db = DiscordBot()
-                    db.post(follow['twitter_id'], status.text, follow['text_channel'])
+                    if name == '':
+                        db.post(follow['twitter_id'], status.text, follow['text_channel'])
+                    else:
+                        db.post(follow['twitter_id'], status.text, follow['text_channel'], image=name)
             con.commit()
             con.close()
         time.sleep(60)
