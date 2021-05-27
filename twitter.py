@@ -37,7 +37,7 @@ class DiscordBot:
         channel = self.client.get_channel(text_channel)
         embed = discord.Embed(title=twitter_id, description=msg, color=0xff0000)
         await channel.send(embed=embed)
-        if images != []:
+        if images != None:
             for image in images:
                 await channel.send(file=discord.File(image))
                 os.remove(image)
